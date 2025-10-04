@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Phone IMEI Inventory Management System">
+    <meta name="theme-color" content="#2196F3">
+    <title>Phone IMEI Inventory</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-icon">
+                    <span class="material-icons">phone_android</span>
+                </div>
+                <h1>Phone IMEI Inventory</h1>
+                <p class="subtitle">Manage your phone inventory with ease</p>
+                <button id="googleSignInBtn" class="google-signin-btn">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    Sign in with Google
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="appScreen" class="screen hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>
+                    <span class="material-icons">phone_android</span>
+                    Phone IMEI Inventory
+                </h1>
+                <div class="header-actions">
+                    <div class="user-info">
+                        <img id="userPhoto" src="" alt="User" class="user-photo">
+                        <span id="userName"></span>
+                    </div>
+                    <button id="signOutBtn" class="btn-icon" title="Sign Out">
+                        <span class="material-icons">logout</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Stats Section -->
+            <div class="stats-container">
+                <div class="stat-card" id="statTotal" data-filter="all">
+                    <div class="stat-icon" style="background: #4CAF50;">
+                        <span class="material-icons">inventory</span>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalStock">0</h3>
+                        <p>Total Stock</p>
+                    </div>
+                </div>
+                <div class="stat-card" id="statSold" data-filter="sold">
+                    <div class="stat-icon" style="background: #FF9800;">
+                        <span class="material-icons">shopping_cart</span>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="soldCount">0</h3>
+                        <p>Sold</p>
+                    </div>
+                </div>
+                <div class="stat-card" id="statAvailable" data-filter="available">
+                    <div class="stat-icon" style="background: #2196F3;">
+                        <span class="material-icons">devices</span>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="availableStock">0</h3>
+                        <p>Available</p>
+                    </div>
+                </div>
+                <div class="stat-card" id="statNew" data-filter="new">
+                    <div class="stat-icon" style="background: #9C27B0;">
+                        <span class="material-icons">new_releases</span>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="newStock">0</h3>
+                        <p>New Phones</p>
+                    </div>
+                </div>
+                <div class="stat-card" id="statSecond" data-filter="second">
+                    <div class="stat-icon" style="background: #FF5722;">
+                        <span class="material-icons">history</span>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="secondStock">0</h3>
+                        <p>Second Hand</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Add Section -->
+            <div class="action-bar">
+                <div class="search-container">
+                    <span class="material-icons">search</span>
+                    <input type="text" id="searchInput" placeholder="Search by Brand, Model or IMEI...">
+                    <button id="clearSearchBtn" class="btn-clear hidden">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+                <div class="action-buttons">
+                    <button id="backupBtn" class="btn-secondary">
+                        <span class="material-icons">save_alt</span>
+                        Backup JSON
+                    </button>
+                    <button id="restoreBtn" class="btn-secondary">
+                        <span class="material-icons">publish</span>
+                        Restore JSON
+                    </button>
+                    <input id="restoreFileInput" type="file" accept="application/json" class="hidden" />
+                    <button id="toggleViewBtn" class="btn-secondary">
+                        <span class="material-icons">view_list</span>
+                        List View
+                    </button>
+                    <button id="exportExcelBtn" class="btn-secondary">
+                        <span class="material-icons">download</span>
+                        Export Excel
+                    </button>
+                    <button id="addBrandBtn" class="btn-secondary">
+                        <span class="material-icons">category</span>
+                        Add Brand
+                    </button>
+                    <button id="trashBtn" class="btn-secondary">
+                        <span class="material-icons">delete_outline</span>
+                        Trash
+                    </button>
+                    <button id="addPhoneBtn" class="btn-primary">
+                        <span class="material-icons">add</span>
+                        Add IMEI
+                    </button>
+                </div>
+            </div>
+
+            <!-- Brands List (Hierarchical View) -->
+            <div class="brands-container" id="brandsContainer">
+                <!-- Brands will be dynamically added here -->
+            </div>
+
+            <!-- List View -->
+            <div class="list-view-container hidden" id="listViewContainer">
+                <div class="list-view-table">
+                    <table class="phones-table">
+                        <thead>
+                            <tr>
+                                <th>Brand</th>
+                                <th>Model</th>
+                                <th>IMEI Number</th>
+                                <th>Condition</th>
+                                <th>Status</th>
+                                <th>Date Added</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listViewBody">
+                            <!-- List items will be dynamically added here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="empty-state hidden">
+                <span class="material-icons">phone_disabled</span>
+                <h3>No phones found</h3>
+                <p>Add your first phone to get started</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Brand Modal -->
+    <div id="brandModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2 id="brandModalTitle">Add Brand</h2>
+                <button class="btn-icon" id="closeBrandModalBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <form id="brandForm">
+                <div class="form-group">
+                    <label for="brandName">Brand Name *</label>
+                    <input type="text" id="brandName" required placeholder="e.g., iPhone, Huawei/Honor">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="cancelBrandBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons">save</span>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit Model Modal -->
+    <div id="modelModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2 id="modelModalTitle">Add Model</h2>
+                <button class="btn-icon" id="closeModelModalBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <form id="modelForm">
+                <div class="form-group">
+                    <label for="modelBrand">Select Brand *</label>
+                    <select id="modelBrand" required>
+                        <option value="">Choose a brand...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="modelName">Model Name *</label>
+                    <input type="text" id="modelName" required placeholder="e.g., iPhone 15 Pro Max">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="cancelModelBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons">save</span>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit IMEI Modal -->
+    <div id="phoneModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="phoneModalTitle">Add IMEI</h2>
+                <button class="btn-icon" id="closePhoneModalBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <form id="phoneForm">
+                <div class="form-group">
+                    <label for="phoneBrand">Select Brand *</label>
+                    <select id="phoneBrand" required>
+                        <option value="">Choose a brand...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="phoneModel">Select Model *</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="phoneModel" required disabled style="flex: 1;">
+                            <option value="">Choose a brand first...</option>
+                        </select>
+                        <button type="button" id="addNewModelBtn" class="btn-secondary" style="padding: 12px 16px; white-space: nowrap;" disabled>
+                            <span class="material-icons" style="font-size: 20px;">add</span>
+                            New Model
+                        </button>
+                    </div>
+                </div>
+                <div id="newModelSection" class="hidden" style="background: #F5F5F9; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label for="newModelName">New Model Name *</label>
+                        <input type="text" id="newModelName" placeholder="e.g., iPhone 15 Pro Max">
+                    </div>
+                    <button type="button" id="cancelNewModelBtn" class="btn-secondary" style="padding: 8px 16px; font-size: 14px;">
+                        Cancel
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label for="phoneCondition">Condition *</label>
+                    <select id="phoneCondition" required>
+                        <option value="new">New Phone</option>
+                        <option value="second">Second Hand</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="imeiNumber">IMEI Number *</label>
+                    <input type="text" id="imeiNumber" required placeholder="e.g., 123456789012345" maxlength="15" pattern="[0-9]{15}" inputmode="numeric">
+                    <small>Enter 15-digit IMEI number</small>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="cancelPhoneBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons">save</span>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2 id="confirmTitle">Confirm Action</h2>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage"></p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="confirmCancelBtn">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmOkBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trash Modal -->
+    <div id="trashModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h2>Trash</h2>
+                <button class="btn-icon" id="closeTrashModalBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <p>Deleted phones are kept for recovery. You can restore or permanently delete them.</p>
+                <div id="trashList" style="max-height: 50vh; overflow: auto; margin-top: 12px;"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="emptyTrashBtn">Empty Trash</button>
+                <button type="button" class="btn-secondary" id="closeTrashBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- App Script -->
+    <script src="app.js"></script>
+</body>
+</html>
