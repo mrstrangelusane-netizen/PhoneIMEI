@@ -1,0 +1,13 @@
+{
+    "name": "Phone IMEI Inventory",
+    "short_name": "IMEI Inventory",
+    "description": "Manage your phone IMEI inventory with ease",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#FFFFFF",
+    "theme_color": "#2196F3",
+    "orientation": "portrait",
+    "icons": []
+}
+
+

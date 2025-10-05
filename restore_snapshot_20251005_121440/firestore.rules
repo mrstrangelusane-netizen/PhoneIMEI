@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Brands
+    match /brands/{brandId} {
+      // Allow reads for authenticated users (client-side filters should ensure users only see their own data)
+      allow read: if request.auth != null;
+      // Allow create only when the created document's userId matches the caller
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow update/delete only when the existing doc belongs to the caller
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Models
+    match /models/{modelId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Phones
+    match /phones/{phoneId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}
+
+
+
