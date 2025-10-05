@@ -611,7 +611,7 @@ function renderPhones(modelId, modelPhones) {
                         <span class="material-icons">phone_android</span>
                     </div>
                     <div class="phone-details">
-                        <h3>IMEI: ${escapeHtml(phone.imeiNumber)}</h3>
+                        <h3>IMEI: ${escapeHtml(phone.imeiNumber)} <button class="btn-icon" title="Copy IMEI" onclick="copyImei('${phone.imeiNumber}')"><span class="material-icons">content_copy</span></button></h3>
                         <p>${phone.condition === 'new' ? '🆕 New Phone' : '🔄 Second Hand'} • Added: ${formatDate(phone.createdAt)}</p>
                     </div>
                 </div>
@@ -1262,7 +1262,7 @@ function renderListView(searchTerm = '') {
         row.innerHTML = `
             <td>${brand ? escapeHtml(brand.name) : 'N/A'}</td>
             <td>${model ? escapeHtml(model.name) : 'N/A'}</td>
-            <td style="font-family: 'Courier New', monospace;">${escapeHtml(phone.imeiNumber)}</td>
+            <td style="font-family: 'Courier New', monospace;">${escapeHtml(phone.imeiNumber)} <button class="btn-icon" title="Copy IMEI" onclick="copyImei('${phone.imeiNumber}')"><span class="material-icons">content_copy</span></button></td>
             <td>
                 <span class="list-condition-badge ${phone.condition === 'new' ? 'new' : 'second'}">
                     ${phone.condition === 'new' ? '🆕 New' : '🔄 Second Hand'}
@@ -1499,6 +1499,45 @@ function formatDate(timestamp) {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString();
+}
+
+// Copy IMEI to clipboard with fallback
+function copyImei(imei) {
+    if (!imei) return;
+    // Prefer modern Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(imei).then(() => {
+            showToast('IMEI copied to clipboard');
+        }).catch(err => {
+            console.error('Clipboard write failed:', err);
+            // Fallback to execCommand
+            fallbackCopy(imei);
+        });
+    } else {
+        fallbackCopy(imei);
+    }
+
+    function fallbackCopy(text) {
+        try {
+            const input = document.createElement('input');
+            input.style.position = 'fixed';
+            input.style.left = '-9999px';
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            input.setSelectionRange(0, 99999); // for mobile
+            const successful = document.execCommand('copy');
+            document.body.removeChild(input);
+            if (successful) {
+                showToast('IMEI copied to clipboard');
+            } else {
+                showToast('Unable to copy IMEI');
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            showToast('Unable to copy IMEI');
+        }
+    }
 }
 
 // Service Worker Registration
