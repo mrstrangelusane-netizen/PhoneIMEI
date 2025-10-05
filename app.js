@@ -98,29 +98,35 @@ function stopScanner() {
     document.getElementById('scannerModal').classList.add('hidden');
 }
 
-// Scanner modal handlers
-document.getElementById('closeScannerModalBtn').addEventListener('click', stopScanner);
-document.getElementById('scannerModal').querySelector('.modal-overlay').addEventListener('click', stopScanner);
+// Scanner modal handlers (guard attachments)
+const closeScannerBtn = document.getElementById('closeScannerModalBtn');
+if (closeScannerBtn) closeScannerBtn.addEventListener('click', stopScanner);
+const scannerOverlay = document.querySelector('#scannerModal .modal-overlay');
+if (scannerOverlay) scannerOverlay.addEventListener('click', stopScanner);
 
-// Torch control
-document.getElementById('toggleTorch').addEventListener('click', async () => {
-    try {
-        const track = document.querySelector('#interactive video').srcObject.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        if (capabilities.torch) {
-            const torchOn = await track.getSettings().torch;
-            await track.applyConstraints({
-                advanced: [{ torch: !torchOn }]
-            });
-            document.getElementById('toggleTorch').querySelector('.material-icons').textContent = 
-                !torchOn ? 'flashlight_off' : 'flashlight_on';
-        } else {
-            document.getElementById('toggleTorch').classList.add('hidden');
+// Torch control (use video element)
+const toggleTorchBtn = document.getElementById('toggleTorch');
+if (toggleTorchBtn) {
+    toggleTorchBtn.addEventListener('click', async () => {
+        try {
+            const videoEl = document.getElementById('interactive');
+            if (!videoEl || !videoEl.srcObject) return;
+            const track = videoEl.srcObject.getVideoTracks()[0];
+            if (!track) return;
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            if (capabilities && capabilities.torch) {
+                const settings = track.getSettings ? track.getSettings() : {};
+                const torchOn = !!settings.torch;
+                await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
+                toggleTorchBtn.querySelector('.material-icons').textContent = !torchOn ? 'flashlight_off' : 'flashlight_on';
+            } else {
+                toggleTorchBtn.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error('Error toggling torch:', err);
         }
-    } catch (err) {
-        console.error('Error toggling torch:', err);
-    }
-});
+    });
+}
 
 // Enable offline persistence (syncs automatically when back online)
 firebase.firestore().enablePersistence({ synchronizeTabs: true }).then(() => {
@@ -206,10 +212,12 @@ auth.onAuthStateChanged((user) => {
         appScreen.classList.remove('hidden');
         initializeDefaultBrands();
         loadAllData();
+        console.log('Auth: user signed in', user.uid, user.email);
     } else {
         currentUser = null;
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
+        console.log('Auth: no user');
     }
 });
 
@@ -244,7 +252,13 @@ googleSignInBtn.addEventListener('click', async () => {
         showToast('Signed in successfully!');
     } catch (error) {
         console.error('Sign in error:', error);
-        showToast('Failed to sign in. Please try again.');
+        // Surface a more descriptive message to the user to aid debugging
+        const message = (error && error.message) ? `${error.code || 'auth/error'}: ${error.message}` : 'Failed to sign in. Please try again.';
+        showToast(message);
+        // For critical auth problems, log instruction hint
+        if (error && error.code === 'auth/unauthorized-domain') {
+            console.warn('Unauthorized domain. Ensure your app domain is added to Firebase Console -> Authentication -> Authorized domains.');
+        }
     } finally {
         hideLoading();
     }
@@ -1620,69 +1634,81 @@ window.addEventListener('offline', () => {
     showToast('You are offline. Changes will sync when back online.');
 });
 
-// Pending writes queue (stored in localStorage for simplicity)
-function getPendingWrites() {
+// IndexedDB helper for pending queue (simple wrapper)
+const DB_NAME = 'phoneimei-db';
+const DB_STORE = 'pendingWrites';
+
+function openDb() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+                db.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function addPendingWrite(op) {
     try {
-        const raw = localStorage.getItem('pendingWrites');
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.error('Failed to read pendingWrites', e);
-        return [];
+        const db = await openDb();
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).add(Object.assign({}, op, { createdAt: Date.now() }));
+        await tx.complete;
+        // register sync
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(reg => { if (reg.sync) reg.sync.register('sync-phones').catch(()=>{}); });
+        }
+    } catch (err) {
+        console.error('Failed to add pending write to IndexedDB', err);
     }
 }
 
-function setPendingWrites(arr) {
-    try {
-        localStorage.setItem('pendingWrites', JSON.stringify(arr));
-    } catch (e) {
-        console.error('Failed to write pendingWrites', e);
-    }
+async function getAllPendingWrites() {
+    const db = await openDb();
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const store = tx.objectStore(DB_STORE);
+    return new Promise((resolve, reject) => {
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
 }
 
-function addPendingWrite(op) {
-    const arr = getPendingWrites();
-    arr.push(op);
-    setPendingWrites(arr);
-    // attempt to register a background sync
-    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-        navigator.serviceWorker.ready.then(reg => {
-            if (reg.sync) reg.sync.register('sync-phones').catch(()=>{});
-        });
-    }
+async function removePendingWrite(id) {
+    const db = await openDb();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).delete(id);
+    return tx.complete;
 }
 
 async function processPendingWrites() {
     if (!navigator.onLine) return;
-    const queue = getPendingWrites();
+    const queue = await getAllPendingWrites();
     if (!queue || queue.length === 0) return;
     showToast('Syncing local changes...');
-    for (const op of queue.slice()) {
+    for (const op of queue) {
         try {
             if (op.type === 'addPhone') {
                 const data = Object.assign({}, op.data);
-                // remove temp id
                 const tempId = data._tempId;
                 delete data._tempId;
                 const ref = await db.collection('phones').add(data);
-                // update local phones array: replace temp id with real id
                 const idx = phones.findIndex(p => p.id === tempId);
-                if (idx !== -1) {
-                    phones[idx].id = ref.id;
-                    phones[idx]._synced = true;
-                }
+                if (idx !== -1) phones[idx].id = ref.id;
             } else if (op.type === 'updatePhone') {
                 await db.collection('phones').doc(op.id).update(op.data);
             } else if (op.type === 'softDeletePhone') {
                 await db.collection('phones').doc(op.id).update({ deleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: op.userId });
-            } else if (op.type === 'permanentDelete') {
+            } else if (op.type === 'permanentDelete' || op.type === 'permanentDelete') {
                 await db.collection('phones').doc(op.id).delete();
             }
-            // remove this op from queue
-            const current = getPendingWrites().filter(q => q !== op);
-            setPendingWrites(current);
+            await removePendingWrite(op.id);
         } catch (err) {
             console.error('Error processing pending op', op, err);
-            // stop processing further to avoid repeated failures
             break;
         }
     }
