@@ -154,7 +154,11 @@ self.addEventListener('notificationclick', (event) => {
 
 // Helper function to sync offline changes
 async function syncPhones() {
-    // Implementation will be added when we add offline support to the main app
+    // The service worker cannot access localStorage; notify all clients to process queued writes
+    const allClients = await clients.matchAll({ includeUncontrolled: true });
+    for (const client of allClients) {
+        client.postMessage({ type: 'sync-phones' });
+    }
 }
 
 

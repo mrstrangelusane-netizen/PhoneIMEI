@@ -1022,7 +1022,7 @@ phoneForm.addEventListener('submit', async (e) => {
                 return;
             }
             
-            await db.collection('phones').add({
+            const phoneData = {
                 brandId: brandId,
                 modelId: modelId,
                 condition: phoneCondition,
@@ -1030,8 +1030,19 @@ phoneForm.addEventListener('submit', async (e) => {
                 userId: currentUser.uid,
                 isSold: false,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            showToast('IMEI added successfully!');
+            };
+            if (navigator.onLine) {
+                await db.collection('phones').add(phoneData);
+                showToast('IMEI added successfully!');
+            } else {
+                // offline: add to pending writes with a temporary id
+                const tempId = 'temp-' + Date.now();
+                const clone = Object.assign({}, phoneData);
+                clone._tempId = tempId;
+                phones.unshift({ id: tempId, ...clone });
+                addPendingWrite({ type: 'addPhone', data: clone });
+                showToast('Added locally. Will sync when online.');
+            }
         }
         phoneModal.classList.add('hidden');
         // Reset new model section
@@ -1120,18 +1131,23 @@ window.deletePhone = function(phoneId) {
             try {
                 showLoading();
                 // Soft-delete: mark as deleted rather than remove
-                await db.collection('phones').doc(phoneId).update({
-                    deleted: true,
-                    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    deletedBy: currentUser.uid
-                });
-                // Optimistically update local state so UI updates immediately
-                const idx = phones.findIndex(p => p.id === phoneId);
-                if (idx !== -1) {
-                    phones[idx].deleted = true;
-                    phones[idx].deletedAt = { toDate: () => new Date() };
-                    phones[idx].deletedBy = currentUser.uid;
-                }
+                    if (navigator.onLine) {
+                        await db.collection('phones').doc(phoneId).update({
+                            deleted: true,
+                            deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            deletedBy: currentUser.uid
+                        });
+                    } else {
+                        // queue soft-delete
+                        addPendingWrite({ type: 'softDeletePhone', id: phoneId, userId: currentUser.uid });
+                    }
+                    // Optimistically update local state so UI updates immediately
+                    const idx = phones.findIndex(p => p.id === phoneId);
+                    if (idx !== -1) {
+                        phones[idx].deleted = true;
+                        phones[idx].deletedAt = { toDate: () => new Date() };
+                        phones[idx].deletedBy = currentUser.uid;
+                    }
                 renderBrands(searchInput.value.trim());
                 renderTrash();
                 updateStats();
@@ -1255,7 +1271,11 @@ function renderTrash() {
             showConfirmDialog('Delete Permanently', 'This will permanently delete the record. Continue?', async () => {
                 try {
                     showLoading();
-                    await db.collection('phones').doc(id).delete();
+                    if (navigator.onLine) {
+                        await db.collection('phones').doc(id).delete();
+                    } else {
+                        addPendingWrite({ type: 'permanentDelete', id });
+                    }
                     // Remove from local state
                     phones = phones.filter(p => p.id !== id);
                     showToast('Record permanently deleted');
@@ -1585,11 +1605,101 @@ function showToast(message) {
 // Network status feedback
 window.addEventListener('online', () => {
     showToast('Back online. Syncing changes...');
+    processPendingWrites();
+    // Try to register background sync if available
+    if (navigator.serviceWorker && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+            if (reg.sync) {
+                try { reg.sync.register('sync-phones'); } catch(e) { /* ignore */ }
+            }
+        });
+    }
 });
 
 window.addEventListener('offline', () => {
     showToast('You are offline. Changes will sync when back online.');
 });
+
+// Pending writes queue (stored in localStorage for simplicity)
+function getPendingWrites() {
+    try {
+        const raw = localStorage.getItem('pendingWrites');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.error('Failed to read pendingWrites', e);
+        return [];
+    }
+}
+
+function setPendingWrites(arr) {
+    try {
+        localStorage.setItem('pendingWrites', JSON.stringify(arr));
+    } catch (e) {
+        console.error('Failed to write pendingWrites', e);
+    }
+}
+
+function addPendingWrite(op) {
+    const arr = getPendingWrites();
+    arr.push(op);
+    setPendingWrites(arr);
+    // attempt to register a background sync
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(reg => {
+            if (reg.sync) reg.sync.register('sync-phones').catch(()=>{});
+        });
+    }
+}
+
+async function processPendingWrites() {
+    if (!navigator.onLine) return;
+    const queue = getPendingWrites();
+    if (!queue || queue.length === 0) return;
+    showToast('Syncing local changes...');
+    for (const op of queue.slice()) {
+        try {
+            if (op.type === 'addPhone') {
+                const data = Object.assign({}, op.data);
+                // remove temp id
+                const tempId = data._tempId;
+                delete data._tempId;
+                const ref = await db.collection('phones').add(data);
+                // update local phones array: replace temp id with real id
+                const idx = phones.findIndex(p => p.id === tempId);
+                if (idx !== -1) {
+                    phones[idx].id = ref.id;
+                    phones[idx]._synced = true;
+                }
+            } else if (op.type === 'updatePhone') {
+                await db.collection('phones').doc(op.id).update(op.data);
+            } else if (op.type === 'softDeletePhone') {
+                await db.collection('phones').doc(op.id).update({ deleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp(), deletedBy: op.userId });
+            } else if (op.type === 'permanentDelete') {
+                await db.collection('phones').doc(op.id).delete();
+            }
+            // remove this op from queue
+            const current = getPendingWrites().filter(q => q !== op);
+            setPendingWrites(current);
+        } catch (err) {
+            console.error('Error processing pending op', op, err);
+            // stop processing further to avoid repeated failures
+            break;
+        }
+    }
+    renderBrands(searchInput.value.trim());
+    renderTrash();
+    updateStats();
+}
+
+// Listen to messages from service worker
+if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', (evt) => {
+        if (!evt.data) return;
+        if (evt.data.type === 'sync-phones') {
+            processPendingWrites();
+        }
+    });
+}
 
 function escapeHtml(text) {
     if (text === null || text === undefined) return '';
