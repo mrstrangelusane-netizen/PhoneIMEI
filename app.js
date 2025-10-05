@@ -13,6 +13,115 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Scanner initialization
+let selectedDeviceId;
+const codeReader = new ZXing.BrowserMultiFormatReader();
+let scannerInitialized = false;
+
+// Get available video devices
+async function getVideoDevices() {
+    try {
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        return videoInputDevices;
+    } catch (err) {
+        console.error('Error listing video devices:', err);
+        return [];
+    }
+}
+
+// Initialize scanner
+async function initScanner() {
+    if (scannerInitialized) return;
+    
+    try {
+        const devices = await getVideoDevices();
+        if (devices.length === 0) {
+            showToast('No camera found');
+            return false;
+        }
+        
+        // Try to find back camera
+        selectedDeviceId = devices.find(d => d.label.toLowerCase().includes('back'))?.deviceId || devices[0].deviceId;
+        
+        // Setup device switching
+        if (devices.length > 1) {
+            document.getElementById('switchCamera').classList.remove('hidden');
+            document.getElementById('switchCamera').onclick = () => {
+                const currentIndex = devices.findIndex(d => d.deviceId === selectedDeviceId);
+                const nextIndex = (currentIndex + 1) % devices.length;
+                selectedDeviceId = devices[nextIndex].deviceId;
+                startScanner();
+            };
+        } else {
+            document.getElementById('switchCamera').classList.add('hidden');
+        }
+        
+        scannerInitialized = true;
+        return true;
+    } catch (err) {
+        console.error('Error initializing scanner:', err);
+        showToast('Failed to initialize camera');
+        return false;
+    }
+}
+
+// Start scanner
+async function startScanner() {
+    try {
+        await codeReader.decodeFromVideoDevice(
+            selectedDeviceId, 
+            'interactive',
+            (result, err) => {
+                if (result) {
+                    const imei = result.text.trim();
+                    if (/^\d{15}$/.test(imei)) {
+                        document.getElementById('imeiNumber').value = imei;
+                        document.getElementById('scannerModal').classList.add('hidden');
+                        showToast('IMEI scanned successfully');
+                        stopScanner();
+                    }
+                }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error('Scanner error:', err);
+                }
+            }
+        );
+    } catch (err) {
+        console.error('Error starting scanner:', err);
+        showToast('Failed to start camera');
+    }
+}
+
+// Stop scanner
+function stopScanner() {
+    codeReader.reset();
+    document.getElementById('scannerModal').classList.add('hidden');
+}
+
+// Scanner modal handlers
+document.getElementById('closeScannerModalBtn').addEventListener('click', stopScanner);
+document.getElementById('scannerModal').querySelector('.modal-overlay').addEventListener('click', stopScanner);
+
+// Torch control
+document.getElementById('toggleTorch').addEventListener('click', async () => {
+    try {
+        const track = document.querySelector('#interactive video').srcObject.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+            const torchOn = await track.getSettings().torch;
+            await track.applyConstraints({
+                advanced: [{ torch: !torchOn }]
+            });
+            document.getElementById('toggleTorch').querySelector('.material-icons').textContent = 
+                !torchOn ? 'flashlight_off' : 'flashlight_on';
+        } else {
+            document.getElementById('toggleTorch').classList.add('hidden');
+        }
+    } catch (err) {
+        console.error('Error toggling torch:', err);
+    }
+});
+
 // Enable offline persistence (syncs automatically when back online)
 firebase.firestore().enablePersistence({ synchronizeTabs: true }).then(() => {
     console.log('Firestore persistence enabled');

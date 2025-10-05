@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
 </head>
 <body>
     <!-- Login Screen -->
@@ -289,8 +290,14 @@
                 </div>
                 <div class="form-group">
                     <label for="imeiNumber">IMEI Number *</label>
-                    <input type="text" id="imeiNumber" required placeholder="e.g., 123456789012345" maxlength="15" pattern="[0-9]{15}" inputmode="numeric">
-                    <small>Enter 15-digit IMEI number</small>
+                    <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                        <input type="text" id="imeiNumber" required placeholder="e.g., 123456789012345" maxlength="15" pattern="[0-9]{15}" inputmode="numeric" style="flex: 1;">
+                        <button type="button" class="btn-secondary" onclick="initScanner().then(success => { if (success) { document.getElementById('scannerModal').classList.remove('hidden'); startScanner(); } });" style="padding: 8px 16px; white-space: nowrap;">
+                            <span class="material-icons">qr_code_scanner</span>
+                            Scan
+                        </button>
+                    </div>
+                    <small>Enter 15-digit IMEI number or scan barcode</small>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" id="cancelPhoneBtn">Cancel</button>
@@ -360,6 +367,34 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     
     <!-- App Script -->
+    <!-- Scanner Modal -->
+    <div id="scannerModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Scan IMEI Barcode</h2>
+                <button id="closeScannerModalBtn" class="close-btn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="interactive" class="viewport"></div>
+                <div class="scanner-controls">
+                    <button id="toggleTorch" class="btn-secondary">
+                        <span class="material-icons">flashlight_on</span>
+                        Toggle Light
+                    </button>
+                    <button id="switchCamera" class="btn-secondary">
+                        <span class="material-icons">flip_camera_android</span>
+                        Switch Camera
+                    </button>
+                </div>
+                <div class="scanner-help">
+                    <p>Position the barcode within the frame to scan</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>
